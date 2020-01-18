@@ -1,0 +1,370 @@
+diff --git a/src/stun.c b/src/stun.c
+index 523c19b..fc10c42 100644
+--- a/src/stun.c
++++ b/src/stun.c
+@@ -1553,15 +1553,15 @@ stunCreateSharedSecretResponse(const StunMessage *request, const StunAddress4 *s
+    valid */
+ bool_t
+ stunServerProcessMsg( char* buf,
+-                      unsigned int bufLen,
+-                      StunAddress4 *from, 
+-                      StunAddress4 *myAddr,
+-                      StunAddress4 *altAddr, 
+-                      StunMessage *resp,
+-                      StunAddress4 *destination,
+-                      StunAtrString *hmacPassword,
+-                      bool_t* changePort,
+-                      bool_t* changeIp)
++		      unsigned int bufLen,
++		      StunAddress4 *from,
++		      StunAddress4 *myAddr,
++		      StunAddress4 *altAddr,
++		      StunMessage *resp,
++		      StunAddress4 *destination,
++		      StunAtrString *hmacPassword,
++		      bool_t* changePort,
++		      bool_t* changeIp)
+ {
+    int i;
+    StunMessage req;
+@@ -1570,203 +1570,168 @@ stunServerProcessMsg( char* buf,
+    uint32_t flags;
+    bool_t ok;
+    /* set up information for default response */
+-	
++
+    memset( &req, 0 , sizeof(req) );
+    memset( resp, 0 , sizeof(*resp) );
+-	
++
+    *changeIp = FALSE;
+    *changePort = FALSE;
+-	
++
+    ok = stunParseMessage( buf,bufLen, &req);
+-   
++
+    if (!ok)      /* Complete garbage, drop it on the floor */
+    {
+-      ortp_error("stun: Request did not parse");
+-      return FALSE;
++	  ortp_error("stun: Request did not parse");
++	  return FALSE;
+    }
+    //ortp_debug("stun: Request parsed ok");
+-	
++
+    mapped = req.mappedAddress.ipv4;
+    respondTo = req.responseAddress.ipv4;
+    flags = req.changeRequest.value;
+-	
++
+    if (req.msgHdr.msgType==(STUN_METHOD_BINDING|STUN_REQUEST))
+    {
+-         if (!req.hasMessageIntegrity)
+-         {
+-            //ortp_debug("stun: BindRequest does not contain SA_MESSAGEINTEGRITY");
+-				
+-            if (0) /* !jf! mustAuthenticate */
+-            {
+-               ortp_error("stun: Received BindRequest with no SA_MESSAGEINTEGRITY. Sending 401.");
+-               stunCreateErrorResponse(resp, 4, 1, "Missing SA_MESSAGEINTEGRITY");
+-               return TRUE;
+-            }
+-         }
+-         else
+-         {
+-            if (!req.hasUsername)
+-            {
+-               ortp_error("stun: No UserName. Send 432.");
+-               stunCreateErrorResponse(resp, 4, 32, "No UserName and contains SA_MESSAGEINTEGRITY");
+-               return TRUE;
+-            }
+-            else
+-            {
+-               //ortp_debug("stun: Validating username: %s", req.username.value );
+-               /* !jf! could retrieve associated password from provisioning here */
+-               if (strcmp(req.username.value, "test") == 0)
+-               {
+-                  if (0)
+-                  {
+-                     /* !jf! if the credentials are stale */
+-                     stunCreateErrorResponse(resp, 4, 30, "Stale credentials on BindRequest");
+-                     return TRUE;
+-                  }
+-                  else
+-                  {
+-                     unsigned char hmac[20];
+-                     //ortp_debug("stun: Validating SA_MESSAGEINTEGRITY");
+-                     /* need access to shared secret */
++	if (!req.hasMessageIntegrity)
++	{
++	      //ortp_debug("stun: BindRequest does not contain SA_MESSAGEINTEGRITY");
++
++	      if (0) /* !jf! mustAuthenticate */
++	      {
++		  ortp_error("stun: Received BindRequest with no SA_MESSAGEINTEGRITY. Sending 401.");
++		  stunCreateErrorResponse(resp, 4, 1, "Missing SA_MESSAGEINTEGRITY");
++		  return TRUE;
++	      }
++	}
++	else
++	{
++		if (!req.hasUsername)
++		{
++			ortp_error("stun: No UserName. Send 432.");
++			stunCreateErrorResponse(resp, 4, 32, "No UserName and contains SA_MESSAGEINTEGRITY");
++			return TRUE;
++		}
++		else
++		{
++			// NOTE: some code was here to perform integrity check by testing over a "test":"1234"
++			// account. It was removed, and we'll validate any message provided that it has a
++			// username. Git will have the history if need be.
++
++			/* need to compute this later after message is filled in */
++			resp->hasMessageIntegrity = TRUE;
++			/* assert(req.hasUsername); */
++			resp->hasUsername = TRUE;
++			resp->username = req.username; /* copy username in */
++		}
+ 
+-#ifndef NOSSL
+-                     {
+-                        unsigned int hmacSize=20;
++	}
+ 
+-                        HMAC(EVP_sha1(), 
+-                             "1234", 4, 
+-                             (const unsigned char*) buf, bufLen-20-4, 
+-                             hmac, &hmacSize);
+-                     }
+-#endif
+-							
+-                     if (memcmp(buf, hmac, 20) != 0)
+-                     {
+-                        ortp_error("stun: SA_MESSAGEINTEGRITY is bad. Sending ");
+-                        stunCreateErrorResponse(resp, 4, 3, "Unknown username. Try test with password 1234");
+-                        return TRUE;
+-                     }
+-							
+-                     /* need to compute this later after message is filled in */
+-                     resp->hasMessageIntegrity = TRUE;
+-                     /* assert(req.hasUsername); */
+-                     resp->hasUsername = TRUE;
+-                     resp->username = req.username; /* copy username in */
+-                  }
+-               }
+-               else
+-               {
+-                  ortp_error("stun: Invalid username: %s Send 430", req.username.value); 
+-               }
+-            }
+-         }
+-			
+-         /* TODO !jf! should check for unknown attributes here and send 420 listing the
+-            unknown attributes. */
+-			
+-         if ( respondTo.port == 0 )
+-         {
+-            /* respondTo = from; */
+-            memcpy(&respondTo, from, sizeof(StunAddress4));
+-         }
+-         if ( mapped.port == 0 ) 
+-         {
+-            /* mapped = from; */
+-            memcpy(&mapped, from, sizeof(StunAddress4));
+-         }
++	/* TODO !jf! should check for unknown attributes here and send 420 listing the
++	      unknown attributes. */
+ 
+-         *changeIp   = ( flags & ChangeIpFlag )?TRUE:FALSE;
+-         *changePort = ( flags & ChangePortFlag )?TRUE:FALSE;
+-			
+-         //ortp_debug("stun: Request is valid:\n");
+-         //ortp_debug("stun: \t flags= %i\n", flags );
+-         //ortp_debug("stun: \t changeIp= %i\n", *changeIp );
+-         //ortp_debug("stun: \t changePort=%i\n", *changePort );
+-         //ortp_debug("stun: \t from= %i\n", from->addr );
+-         //ortp_debug("stun: \t respond to= %i\n", respondTo.addr );
+-         //ortp_debug("stun: \t mapped= %i\n", mapped.addr );
+-				
+-         /* form the outgoing message */
+-         resp->msgHdr.msgType = (STUN_METHOD_BINDING | STUN_SUCCESS_RESP);
+-         resp->msgHdr.magic_cookie = ntohl(req.msgHdr.magic_cookie);
+-         for (i=0; i<12; i++ )
+-         {
+-            resp->msgHdr.tr_id.octet[i] = req.msgHdr.tr_id.octet[i];
+-         }
+-		
+-         if (1) /* do xorMapped address or not */
+-         {
+-            uint32_t cookie = 0x2112A442;
+-            resp->hasXorMappedAddress = TRUE;
+-            resp->xorMappedAddress.ipv4.port = mapped.port^(cookie>>16);
+-            resp->xorMappedAddress.ipv4.addr = mapped.addr^cookie;
+-         }
++	if ( respondTo.port == 0 )
++	{
++	      /* respondTo = from; */
++	      memcpy(&respondTo, from, sizeof(StunAddress4));
++	}
++	if ( mapped.port == 0 )
++	{
++	      /* mapped = from; */
++	      memcpy(&mapped, from, sizeof(StunAddress4));
++	}
++
++	*changeIp   = ( flags & ChangeIpFlag )?TRUE:FALSE;
++	*changePort = ( flags & ChangePortFlag )?TRUE:FALSE;
++
++	//ortp_debug("stun: Request is valid:\n");
++	//ortp_debug("stun: \t flags= %i\n", flags );
++	//ortp_debug("stun: \t changeIp= %i\n", *changeIp );
++	//ortp_debug("stun: \t changePort=%i\n", *changePort );
++	//ortp_debug("stun: \t from= %i\n", from->addr );
++	//ortp_debug("stun: \t respond to= %i\n", respondTo.addr );
++	//ortp_debug("stun: \t mapped= %i\n", mapped.addr );
++
++	/* form the outgoing message */
++	resp->msgHdr.msgType = (STUN_METHOD_BINDING | STUN_SUCCESS_RESP);
++	resp->msgHdr.magic_cookie = ntohl(req.msgHdr.magic_cookie);
++	for (i=0; i<12; i++ )
++	{
++	      resp->msgHdr.tr_id.octet[i] = req.msgHdr.tr_id.octet[i];
++	}
++
++	if (1) /* do xorMapped address or not */
++	{
++	      uint32_t cookie = 0x2112A442;
++	      resp->hasXorMappedAddress = TRUE;
++	      resp->xorMappedAddress.ipv4.port = mapped.port^(cookie>>16);
++	      resp->xorMappedAddress.ipv4.addr = mapped.addr^cookie;
++	}
++
++	resp->hasMappedAddress = TRUE;
++	resp->mappedAddress.ipv4.port=mapped.port;
++	resp->mappedAddress.ipv4.addr=mapped.addr;
++
++	resp->hasSourceAddress = TRUE;
++	resp->sourceAddress.ipv4.port = (*changePort) ? altAddr->port : myAddr->port;
++	resp->sourceAddress.ipv4.addr = (*changeIp)   ? altAddr->addr : myAddr->addr;
++
++	resp->hasChangedAddress = TRUE;
++	resp->changedAddress.ipv4.port = altAddr->port;
++	resp->changedAddress.ipv4.addr = altAddr->addr;
++
++	if ( req.hasUsername && req.username.sizeValue > 0 )
++	{
++	      /* copy username in */
++	      resp->hasUsername = TRUE;
++	      /* assert( req.username.sizeValue % 4 == 0 ); */
++	      /* assert( req.username.sizeValue < STUN_MAX_STRING ); */
++	      memcpy( resp->username.value, req.username.value, req.username.sizeValue );
++	      resp->username.sizeValue = req.username.sizeValue;
++	}
++
++	if (1) /* add ServerName */
++	{
++	      const char serverName[] = "oRTP   " STUN_VERSION; /* must pad to mult of 4 */
++	      resp->hasSoftware = TRUE;
++
++	      /* assert( sizeof(serverName) < STUN_MAX_STRING ); */
++	      /* cerr << "sizeof serverName is "  << sizeof(serverName) ); */
++	      /* assert( sizeof(serverName)%4 == 0 ); */
++	      memcpy( resp->softwareName.value, serverName, sizeof(serverName));
++	      resp->softwareName.sizeValue = sizeof(serverName);
++	}
+ 
+-		resp->hasMappedAddress = TRUE;
+-		resp->mappedAddress.ipv4.port=mapped.port;
+-		resp->mappedAddress.ipv4.addr=mapped.addr;
+-         
+-         resp->hasSourceAddress = TRUE;
+-         resp->sourceAddress.ipv4.port = (*changePort) ? altAddr->port : myAddr->port;
+-         resp->sourceAddress.ipv4.addr = (*changeIp)   ? altAddr->addr : myAddr->addr;
+-			
+-         resp->hasChangedAddress = TRUE;
+-         resp->changedAddress.ipv4.port = altAddr->port;
+-         resp->changedAddress.ipv4.addr = altAddr->addr;
+-	
+-         if ( req.hasUsername && req.username.sizeValue > 0 ) 
+-         {
+-            /* copy username in */
+-            resp->hasUsername = TRUE;
+-            /* assert( req.username.sizeValue % 4 == 0 ); */
+-            /* assert( req.username.sizeValue < STUN_MAX_STRING ); */
+-            memcpy( resp->username.value, req.username.value, req.username.sizeValue );
+-            resp->username.sizeValue = req.username.sizeValue;
+-         }
+-		
+-         if (1) /* add ServerName */
+-         {
+-            const char serverName[] = "oRTP   " STUN_VERSION; /* must pad to mult of 4 */
+-            resp->hasSoftware = TRUE;
+-            
+-            /* assert( sizeof(serverName) < STUN_MAX_STRING ); */
+-            /* cerr << "sizeof serverName is "  << sizeof(serverName) ); */
+-            /* assert( sizeof(serverName)%4 == 0 ); */
+-            memcpy( resp->softwareName.value, serverName, sizeof(serverName));
+-            resp->softwareName.sizeValue = sizeof(serverName);
+-         }
+-         
+ #if 0
+-         if ( req.hasMessageIntegrity & req.hasUsername )  
+-         {
+-            /* this creates the password that will be used in the HMAC when then */
+-            /* messages is sent */
+-            stunCreatePassword( &req.username, hmacPassword );
+-         }
++	if ( req.hasMessageIntegrity & req.hasUsername )
++	{
++	      /* this creates the password that will be used in the HMAC when then */
++	      /* messages is sent */
++	      stunCreatePassword( &req.username, hmacPassword );
++	}
+ #endif
+ 
+-         if (req.hasUsername && (req.username.sizeValue > 64 ) )
+-         {
+-            uint32_t source;
+-            /* assert( sizeof(int) == sizeof(uint32_t) ); */
+-					
+-            sscanf(req.username.value, "%x", &source);
+-            resp->hasReflectedFrom = TRUE;
+-            resp->reflectedFrom.ipv4.port = 0;
+-            resp->reflectedFrom.ipv4.addr = source;
+-         }
+-				
+-         destination->port = respondTo.port;
+-         destination->addr = respondTo.addr;
+-			
+-         return TRUE;		
++	if (req.hasUsername && (req.username.sizeValue > 64 ) )
++	{
++	      uint32_t source;
++	      /* assert( sizeof(int) == sizeof(uint32_t) ); */
++
++	      sscanf(req.username.value, "%x", &source);
++	      resp->hasReflectedFrom = TRUE;
++	      resp->reflectedFrom.ipv4.port = 0;
++	      resp->reflectedFrom.ipv4.addr = source;
++	}
++
++	destination->port = respondTo.port;
++	destination->addr = respondTo.addr;
++
++	return TRUE;
+    }
+    else
+    {
+-         ortp_error("stun: Unknown or unsupported request ");
+-         return FALSE;
++		 ortp_error("stun: Unknown or unsupported request ");
++		 return FALSE;
+    }
+-	
++
+    /* assert(0); */
+    return FALSE;
+ }
