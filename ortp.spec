@@ -1,6 +1,6 @@
 Name:           ortp
 Version:        0.20.0
-Release:        10%{?dist}
+Release:        6%{?dist}
 Summary:        A C library implementing the RTP protocol (RFC3550)
 Epoch:          1
 
@@ -8,13 +8,6 @@ Group:          System Environment/Libraries
 License:        LGPLv2+ and VSL
 URL:            http://www.linphone.org/eng/documentation/dev/ortp.html
 Source:         http://download.savannah.gnu.org/releases/linphone/ortp/sources/%{name}-%{version}.tar.gz
-
-Patch0:         ortp-0.20.0-bz#1005212-bounds-checking.patch
-Patch1:         ortp-0.20.0-bz#1005255-unsafe-shared-memory.patch
-Patch2:         ortp-0.20.0-bz#1005216-hardcoded-username.patch
-Patch3:         ortp-0.20.0-bz#1005218-length-check.patch
-Patch4:         ortp-0.20.0-bz#1005219-sign-overflow-checks.patch
-Patch5:         ortp-0.20.0-bz#1005261-domain-socket.patch
 
 BuildRequires:  doxygen
 BuildRequires:  graphviz
@@ -46,12 +39,6 @@ Libraries and headers required to develop software with ortp.
 %setup0 -q
 autoreconf -i -f
 
-%patch0 -p1 -b .bounds-checking
-%patch1 -p1 -b .unsafe-shared-memory
-%patch2 -p1 -b .hardcoded-username
-%patch3 -p1 -b .length-check
-%patch4 -p1 -b .sign-overflow-checks
-%patch5 -p1 -b .domain-socket
 
 %build
 %configure --disable-static \
@@ -84,22 +71,6 @@ rm -r %{buildroot}%{_datadir}/doc/ortp
 %{_libdir}/pkgconfig/ortp.pc
 
 %changelog
-* Mon Feb 10 2014 Jan Grulich <jgrulich@redhat.com> - 1:0.20.0-10
-- Add check for user UID when connecting to pipe (#1005261)
-- Add length check in stunEncodeMessage (#1005218)
-- Add sign and overflow checks (#1005219)
-- Remove hardcoded username and password (#1005216)
-
-* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 1:0.20.0-9
-- Mass rebuild 2014-01-24
-
-* Wed Jan 22 2014 Jan Grulich <jgrulich@redhat.com> - 1:0.20.0-8
-- Set better permissions for shared memory (#1005255)
-- Sanity checks (#1005212)
-
-* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 1:0.20.0-7
-- Mass rebuild 2013-12-27
-
 * Wed Aug 14 2013 Jan Grulich <jgrulich@redhat.com> - 1:0.20.0-6
 - Fix multilib regression from RPMdiff (#884133)
 
